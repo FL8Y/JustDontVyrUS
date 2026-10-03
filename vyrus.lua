@@ -1,9 +1,6 @@
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Players = game:GetService("Players")
-
-local LocalPlayer = Players.LocalPlayer
 
 --//==================================================
 --// GAME MODULES
@@ -42,11 +39,8 @@ local Settings = {
 
     Order = "Rarest First",
 
-    -- Fusion visual optimization
-    SkipFusionEffects = false,
-
-    -- Fusion controller research
-    DisableFusionController = false,
+    -- Fusion animation
+    RemoveFusionAnimation = false,
 }
 
 local Stats = {
@@ -55,11 +49,166 @@ local Stats = {
 }
 
 --//==================================================
---// FUSION CONTROLLER STATE
+--// FUSION ANIMATION REMOVER
 --//==================================================
 
 local DisabledConnections = {}
-local IsControllerDisabled = false
+local IsAnimationRemoved = false
+
+local function getControllerConnection()
+
+    if not getconnections then
+
+        warn(
+            "[Animation Remover] getconnections is not supported by this executor"
+        )
+
+        return nil
+    end
+
+    for _, connection in ipairs(
+        getconnections(ResultRemote.OnClientEvent)
+    ) do
+
+        local fn = connection.Function
+
+        if fn then
+
+            local info =
+                debug.getinfo(fn)
+
+            if info and info.source then
+
+                if tostring(info.source):find(
+                    "FusingController",
+                    1,
+                    true
+                ) then
+
+                    return connection
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
+local function removeFusionAnimation()
+
+    if IsAnimationRemoved then
+
+        warn(
+            "[Animation Remover] Animation is already removed"
+        )
+
+        return true
+    end
+
+    local connection =
+        getControllerConnection()
+
+    if not connection then
+
+        warn(
+            "[Animation Remover] FusingController connection NOT FOUND"
+        )
+
+        Rayfield:Notify({
+            Title = "Animation Remover",
+            Content = "FusingController connection was not found.",
+            Duration = 4
+        })
+
+        return false
+    end
+
+    DisabledConnections[1] =
+        connection
+
+    local success, err =
+        pcall(function()
+
+            connection:Disable()
+
+        end)
+
+    if not success then
+
+        table.clear(
+            DisabledConnections
+        )
+
+        warn(
+            "[Animation Remover] Failed to disable controller:",
+            err
+        )
+
+        Rayfield:Notify({
+            Title = "Animation Remover",
+            Content = "Failed to disable FusingController.",
+            Duration = 4
+        })
+
+        return false
+    end
+
+    IsAnimationRemoved = true
+
+    warn("================================")
+    warn("FUSION ANIMATION REMOVED")
+    warn("FusingController disabled")
+    warn("Result RemoteEvent remains active")
+    warn("================================")
+
+    Rayfield:Notify({
+        Title = "Animation Remover",
+        Content = "Fusion animation removed.",
+        Duration = 3
+    })
+
+    return true
+end
+
+local function restoreFusionAnimation()
+
+    if not IsAnimationRemoved then
+
+        warn(
+            "[Animation Remover] Animation is already enabled"
+        )
+
+        return
+    end
+
+    for _, connection in ipairs(
+        DisabledConnections
+    ) do
+
+        pcall(function()
+
+            connection:Enable()
+
+        end)
+    end
+
+    table.clear(
+        DisabledConnections
+    )
+
+    IsAnimationRemoved = false
+
+    warn("================================")
+    warn("FUSION ANIMATION RESTORED")
+    warn("FusingController enabled")
+    warn("================================")
+
+    Rayfield:Notify({
+        Title = "Animation Remover",
+        Content = "Fusion animation restored.",
+        Duration = 3
+    })
+end
 
 --//==================================================
 --// NUMBER SUFFIXES
@@ -116,7 +265,9 @@ local function parseNumber(value)
             multipliers[suffix]
 
         if number and multiplier then
+
             return number * multiplier
+
         end
     end
 
@@ -140,7 +291,8 @@ local function formatNumber(value)
 
         if value >= divisor then
 
-            local n = value / divisor
+            local n =
+                value / divisor
 
             if math.abs(
                 n - math.floor(n)
@@ -152,7 +304,10 @@ local function formatNumber(value)
             end
 
             local formatted =
-                string.format("%.3f", n)
+                string.format(
+                    "%.3f",
+                    n
+                )
 
             formatted =
                 formatted
@@ -187,30 +342,44 @@ local function getInventory()
     local best = nil
     local bestSize = 0
 
-    for _, value in pairs(getgc(true)) do
+    for _, value in pairs(
+        getgc(true)
+    ) do
 
         if type(value) == "table" then
 
             local ok, inventory =
-                pcall(rawget, value, "Inventory")
+                pcall(
+                    rawget,
+                    value,
+                    "Inventory"
+                )
 
-            if ok and type(inventory) == "table" then
+            if ok
+                and type(inventory) == "table"
+            then
 
                 local size = 0
 
-                for guid, data in pairs(inventory) do
+                for guid, data in pairs(
+                    inventory
+                ) do
 
                     if isGUID(guid)
                         and type(data) == "table"
-                        and rawget(data, "name") then
+                        and rawget(data, "name")
+                    then
 
                         size += 1
+
                     end
                 end
 
                 if size > bestSize then
+
                     bestSize = size
                     best = inventory
+
                 end
             end
         end
@@ -231,8 +400,12 @@ local function getChance(data)
             data
         )
 
-    if ok and type(result) == "number" then
+    if ok
+        and type(result) == "number"
+    then
+
         return result
+
     end
 
     return nil
@@ -253,15 +426,23 @@ local function scan()
 
     local groups = {}
 
-    for guid, data in pairs(inventory) do
+    for guid, data in pairs(
+        inventory
+    ) do
 
         if isGUID(guid)
-            and type(data) == "table" then
+            and type(data) == "table"
+        then
 
             local name =
-                rawget(data, "name")
+                rawget(
+                    data,
+                    "name"
+                )
 
-            if name and Entries[name] then
+            if name
+                and Entries[name]
+            then
 
                 local chance =
                     getChance(data)
@@ -269,10 +450,13 @@ local function scan()
                 if chance then
 
                     local groupKey =
-                        formatNumber(chance)
+                        formatNumber(
+                            chance
+                        )
 
                     groups[groupKey] =
-                        groups[groupKey] or {}
+                        groups[groupKey]
+                        or {}
 
                     table.insert(
                         groups[groupKey],
@@ -306,7 +490,9 @@ end
 --// FIND CANDIDATES
 --//==================================================
 
-local function getCandidates(scanData)
+local function getCandidates(
+    scanData
+)
 
     local candidates = {}
 
@@ -320,7 +506,8 @@ local function getCandidates(scanData)
                 units[1].chance
 
             if chance >= Settings.From
-                and chance < Settings.Below then
+                and chance < Settings.Below
+            then
 
                 table.insert(
                     candidates,
@@ -335,40 +522,63 @@ local function getCandidates(scanData)
         end
     end
 
-    if Settings.Order == "Rarest First" then
+    --// RAREST FIRST
+
+    if Settings.Order ==
+        "Rarest First"
+    then
 
         table.sort(
             candidates,
             function(a, b)
 
                 if a.chance ~= b.chance then
-                    return a.chance > b.chance
+
+                    return a.chance >
+                        b.chance
+
                 end
 
-                return a.count > b.count
+                return a.count >
+                    b.count
             end
         )
 
-    elseif Settings.Order == "Most Copies First" then
+    --// MOST COPIES FIRST
+
+    elseif Settings.Order ==
+        "Most Copies First"
+    then
 
         table.sort(
             candidates,
             function(a, b)
 
                 if a.count ~= b.count then
-                    return a.count > b.count
+
+                    return a.count >
+                        b.count
+
                 end
 
-                return a.chance > b.chance
+                return a.chance >
+                    b.chance
             end
         )
 
-    elseif Settings.Order == "Lowest Value First" then
+    --// LOWEST VALUE FIRST
+
+    elseif Settings.Order ==
+        "Lowest Value First"
+    then
 
         table.sort(
             candidates,
             function(a, b)
-                return a.chance < b.chance
+
+                return a.chance <
+                    b.chance
+
             end
         )
     end
@@ -380,13 +590,15 @@ end
 --// WINDOW
 --//==================================================
 
-local Window = Rayfield:CreateWindow({
+local Window =
+    Rayfield:CreateWindow({
 
     Name = "Anime Dice | Auto Fuse",
 
     LoadingTitle = "Auto Fuse",
 
-    LoadingSubtitle = "Fusion Animation Research",
+    LoadingSubtitle =
+        "Exact Chance Fusion",
 
     ConfigurationSaving = {
         Enabled = false,
@@ -402,12 +614,6 @@ local Window = Rayfield:CreateWindow({
 local Tab =
     Window:CreateTab(
         "Fusing",
-        nil
-    )
-
-local ResearchTab =
-    Window:CreateTab(
-        "Animation Test",
         nil
     )
 
@@ -441,366 +647,45 @@ local ScanLabel =
     )
 
 --//==================================================
---// FUSION EFFECT SUPPRESSOR
+--// FUSION ANIMATION
 --//==================================================
 
-local FusionEffectConnection = nil
-
-local function handleFusionObject(obj)
-
-    if not Settings.SkipFusionEffects then
-        return
-    end
-
-    if obj:IsA("ParticleEmitter")
-        or obj:IsA("Beam")
-        or obj:IsA("Trail") then
-
-        obj.Enabled = false
-        return
-    end
-
-    if obj.Name == "CutsceneBlackFade"
-        and obj:IsA("ScreenGui") then
-
-        obj.Enabled = false
-        return
-    end
-
-    if obj.Name == "Frame"
-        and obj.Parent
-        and obj.Parent.Name == "CutsceneBlackFade"
-        and obj:IsA("GuiObject") then
-
-        obj.Visible = false
-    end
-end
-
-local function startFusionEffectSuppressor()
-
-    if FusionEffectConnection then
-        return
-    end
-
-    local PlayerGui =
-        LocalPlayer:WaitForChild("PlayerGui")
-
-    FusionEffectConnection =
-        PlayerGui.DescendantAdded:Connect(
-            handleFusionObject
-        )
-
-    print(
-        "[Fusion FPS] Effect listener started."
-    )
-end
-
-local function stopFusionEffectSuppressor()
-
-    if FusionEffectConnection then
-
-        FusionEffectConnection:Disconnect()
-
-        FusionEffectConnection = nil
-
-        print(
-            "[Fusion FPS] Effect listener stopped."
-        )
-    end
-end
-
---//==================================================
---// FUSION FPS TOGGLE
---//==================================================
+Tab:CreateSection(
+    "Fusion Animation"
+)
 
 Tab:CreateToggle({
 
-    Name = "Skip Fusion Effects",
+    Name = "Remove Fusion Animation",
 
     CurrentValue = false,
 
-    Flag = "SkipFusionEffects",
+    Flag =
+        "RemoveFusionAnimation",
 
     Callback = function(value)
 
-        Settings.SkipFusionEffects =
+        Settings.RemoveFusionAnimation =
             value
 
         if value then
 
-            startFusionEffectSuppressor()
-
-            Rayfield:Notify({
-                Title = "Fusion FPS",
-                Content = "Effect suppression enabled.",
-                Duration = 3
-            })
+            removeFusionAnimation()
 
         else
 
-            stopFusionEffectSuppressor()
+            restoreFusionAnimation()
 
-            Rayfield:Notify({
-                Title = "Fusion FPS",
-                Content = "Effect suppression disabled.",
-                Duration = 3
-            })
         end
     end,
 })
 
---//==================================================
---// FUSING CONTROLLER RESEARCH
---//==================================================
-
-local function getControllerConnection()
-
-    if not getconnections then
-
-        warn(
-            "[Fusion Research] getconnections is not supported."
-        )
-
-        return nil
-    end
-
-    for _, connection in ipairs(
-        getconnections(ResultRemote.OnClientEvent)
-    ) do
-
-        local fn = connection.Function
-
-        if fn then
-
-            local info =
-                debug.getinfo(fn)
-
-            if info and info.source then
-
-                if tostring(info.source):find(
-                    "FusingController",
-                    1,
-                    true
-                ) then
-
-                    return connection
-                end
-            end
-        end
-    end
-
-    return nil
-end
-
-local function disableController()
-
-    if IsControllerDisabled then
-
-        warn(
-            "[Fusion Research] Controller listener already disabled."
-        )
-
-        return
-    end
-
-    local connection =
-        getControllerConnection()
-
-    if not connection then
-
-        warn(
-            "[Fusion Research] FusingController connection NOT FOUND."
-        )
-
-        Rayfield:Notify({
-            Title = "Fusion Research",
-            Content = "FusingController connection was not found.",
-            Duration = 4
-        })
-
-        return
-    end
-
-    DisabledConnections[1] =
-        connection
-
-    local success, err =
-        pcall(function()
-            connection:Disable()
-        end)
-
-    if not success then
-
-        table.clear(
-            DisabledConnections
-        )
-
-        warn(
-            "[Fusion Research] Failed to disable:",
-            err
-        )
-
-        return
-    end
-
-    IsControllerDisabled = true
-
-    warn("================================")
-    warn("FUSING CONTROLLER DISABLED")
-    warn("Result RemoteEvent remains active")
-    warn("Perform ONE fusion now.")
-    warn("================================")
-
-    Rayfield:Notify({
-        Title = "Fusion Research",
-        Content = "Controller disabled. Perform ONE fusion.",
-        Duration = 4
-    })
-end
-
-local function enableController()
-
-    if not IsControllerDisabled then
-
-        warn(
-            "[Fusion Research] Controller is already enabled."
-        )
-
-        return
-    end
-
-    for _, connection in ipairs(
-        DisabledConnections
-    ) do
-
-        pcall(function()
-            connection:Enable()
-        end)
-    end
-
-    table.clear(
-        DisabledConnections
-    )
-
-    IsControllerDisabled = false
-
-    warn("================================")
-    warn("FUSING CONTROLLER RESTORED")
-    warn("================================")
-
-    Rayfield:Notify({
-        Title = "Fusion Research",
-        Content = "FusingController restored.",
-        Duration = 3
-    })
-end
-
---//==================================================
---// CONTROLLER TOGGLE
---//==================================================
-
-ResearchTab:CreateToggle({
-
-    Name = "Disable Fusion Result Controller",
-
-    CurrentValue = false,
-
-    Flag = "DisableFusionController",
-
-    Callback = function(value)
-
-        Settings.DisableFusionController =
-            value
-
-        if value then
-            disableController()
-        else
-            enableController()
-        end
-    end,
-})
-
---//==================================================
---// INSPECT RESULT CONNECTIONS
---//==================================================
-
-ResearchTab:CreateButton({
-
-    Name = "Inspect Result Connections",
-
-    Callback = function()
-
-        warn("================================")
-        warn("RESULT CONNECTION INSPECTION")
-        warn("================================")
-
-        if not getconnections then
-
-            warn(
-                "getconnections unavailable"
-            )
-
-            return
-        end
-
-        local connections =
-            getconnections(
-                ResultRemote.OnClientEvent
-            )
-
-        warn(
-            "Connections:",
-            #connections
-        )
-
-        for i, connection in ipairs(
-            connections
-        ) do
-
-            local fn =
-                connection.Function
-
-            if fn then
-
-                local info =
-                    debug.getinfo(fn)
-
-                warn(
-                    "#" .. i,
-                    "SOURCE =",
-                    info and info.source or "unknown",
-                    "LINE =",
-                    info and info.currentline or "unknown"
-                )
-            end
-        end
-
-        warn("================================")
-    end,
-})
-
---//==================================================
---// RESEARCH STATUS
---//==================================================
-
-ResearchTab:CreateSection(
-    "Fusion Animation Isolation"
+Tab:CreateLabel(
+    "Disables the FusingController Result listener."
 )
 
-ResearchTab:CreateLabel(
-    "Effect suppressor: Particles / Beams / Trails / Fade"
-)
-
-ResearchTab:CreateLabel(
-    "Controller test: FusingController Result callback"
-)
-
-ResearchTab:CreateLabel(
-    "Use one test at a time when comparing frame behavior."
-)
-
-ResearchTab:CreateLabel(
-    "If controller is disabled, Result RemoteEvent stays active."
+Tab:CreateLabel(
+    "Result RemoteEvent remains active."
 )
 
 --//==================================================
@@ -813,14 +698,17 @@ Tab:CreateInput({
 
     PlaceholderText = "650qd",
 
-    RemoveTextAfterFocusLost = false,
+    RemoveTextAfterFocusLost =
+        false,
 
     CurrentValue = "",
 
     Callback = function(value)
 
         if value == "" then
+
             Settings.From = 0
+
             return
         end
 
@@ -828,7 +716,10 @@ Tab:CreateInput({
             parseNumber(value)
 
         if parsed then
-            Settings.From = parsed
+
+            Settings.From =
+                parsed
+
         end
     end,
 })
@@ -843,14 +734,18 @@ Tab:CreateInput({
 
     PlaceholderText = "1sx",
 
-    RemoveTextAfterFocusLost = false,
+    RemoveTextAfterFocusLost =
+        false,
 
     CurrentValue = "",
 
     Callback = function(value)
 
         if value == "" then
-            Settings.Below = math.huge
+
+            Settings.Below =
+                math.huge
+
             return
         end
 
@@ -858,7 +753,10 @@ Tab:CreateInput({
             parseNumber(value)
 
         if parsed then
-            Settings.Below = parsed
+
+            Settings.Below =
+                parsed
+
         end
     end,
 })
@@ -872,9 +770,13 @@ Tab:CreateDropdown({
     Name = "Order",
 
     Options = {
+
         "Rarest First",
+
         "Most Copies First",
+
         "Lowest Value First",
+
     },
 
     CurrentOption = {
@@ -884,10 +786,14 @@ Tab:CreateDropdown({
     Callback = function(option)
 
         if type(option) == "table" then
-            option = option[1]
+
+            option =
+                option[1]
+
         end
 
-        Settings.Order = option
+        Settings.Order =
+            option
     end,
 })
 
@@ -895,18 +801,30 @@ Tab:CreateDropdown({
 --// FUSE THREE UNITS
 --//==================================================
 
-local function fuseSelected(selected)
+local function fuseSelected(
+    selected
+)
 
     if not selected then
         return false
     end
 
-    local a = selected.units[1]
-    local b = selected.units[2]
-    local c = selected.units[3]
+    local a =
+        selected.units[1]
 
-    if not a or not b or not c then
+    local b =
+        selected.units[2]
+
+    local c =
+        selected.units[3]
+
+    if not a
+        or not b
+        or not c
+    then
+
         return false
+
     end
 
     local unitNames =
@@ -917,10 +835,15 @@ local function fuseSelected(selected)
         .. tostring(c.name)
 
     local chanceText =
-        formatNumber(selected.chance)
+        formatNumber(
+            selected.chance
+        )
+
+    --// SHOW BEFORE FUSING
 
     StatusLabel:Set(
-        "Fusing: " .. unitNames
+        "Fusing: "
+        .. unitNames
     )
 
     TargetLabel:Set(
@@ -930,13 +853,45 @@ local function fuseSelected(selected)
         .. unitNames
     )
 
-    print("==============================")
-    print("[AUTO FUSE]")
-    print("Unit 1:", a.name, "|", a.chance)
-    print("Unit 2:", b.name, "|", b.chance)
-    print("Unit 3:", c.name, "|", c.chance)
-    print("Display Chance: 1 in " .. chanceText)
-    print("==============================")
+    print(
+        "=============================="
+    )
+
+    print(
+        "[AUTO FUSE]"
+    )
+
+    print(
+        "Unit 1:",
+        a.name,
+        "|",
+        a.chance
+    )
+
+    print(
+        "Unit 2:",
+        b.name,
+        "|",
+        b.chance
+    )
+
+    print(
+        "Unit 3:",
+        c.name,
+        "|",
+        c.chance
+    )
+
+    print(
+        "Display Chance: 1 in "
+        .. chanceText
+    )
+
+    print(
+        "=============================="
+    )
+
+    --// ACTUAL FUSION
 
     local success, err =
         pcall(function()
@@ -946,6 +901,7 @@ local function fuseSelected(selected)
                 b.guid,
                 c.guid
             )
+
         end)
 
     if success then
@@ -953,11 +909,13 @@ local function fuseSelected(selected)
         Stats.Done += 1
 
         DoneLabel:Set(
-            "Done: " .. Stats.Done
+            "Done: "
+            .. Stats.Done
         )
 
         StatusLabel:Set(
-            "Fused: " .. unitNames
+            "Fused: "
+            .. unitNames
         )
 
         TargetLabel:Set(
@@ -1003,7 +961,8 @@ local function performFusion()
     Stats.Scans += 1
 
     ScanLabel:Set(
-        "Scans: " .. Stats.Scans
+        "Scans: "
+        .. Stats.Scans
     )
 
     local data =
@@ -1057,7 +1016,9 @@ local function performFusion()
         selected.count
     )
 
-    return fuseSelected(selected)
+    return fuseSelected(
+        selected
+    )
 end
 
 --//==================================================
@@ -1069,7 +1030,9 @@ Tab:CreateButton({
     Name = "Find Next Fusion",
 
     Callback = function()
+
         performFusion()
+
     end,
 })
 
@@ -1083,11 +1046,13 @@ Tab:CreateToggle({
 
     CurrentValue = false,
 
-    Flag = "AutoFuseToggle",
+    Flag =
+        "AutoFuseToggle",
 
     Callback = function(value)
 
-        Settings.Enabled = value
+        Settings.Enabled =
+            value
 
         if not value then
 
@@ -1139,33 +1104,19 @@ Tab:CreateSlider({
 
     CurrentValue = 1.5,
 
-    Flag = "FuseDelaySlider",
+    Flag =
+        "FuseDelaySlider",
 
     Callback = function(value)
 
-        Settings.Delay = value
+        Settings.Delay =
+            value
     end,
 })
 
 --//==================================================
 --// INFORMATION
 --//==================================================
-
-Tab:CreateSection(
-    "Fusion FPS Optimization"
-)
-
-Tab:CreateLabel(
-    "Skip Fusion Effects disables newly-created effects."
-)
-
-Tab:CreateLabel(
-    "Uses an event listener instead of constant GUI scanning."
-)
-
-Tab:CreateLabel(
-    "Targets ParticleEmitters, Beams, Trails and cutscene fade."
-)
 
 Tab:CreateSection(
     "How It Selects"
@@ -1192,25 +1143,15 @@ Tab:CreateLabel(
 )
 
 --//==================================================
---// CLEANUP
---//==================================================
-
-game:GetService("Players").LocalPlayer.CharacterRemoving:Connect(
-    function()
-        if IsControllerDisabled then
-            enableController()
-        end
-
-        stopFusionEffectSuppressor()
-    end
-)
-
---//==================================================
 --// LOADED
 --//==================================================
 
 Rayfield:Notify({
+
     Title = "Auto Fuse",
-    Content = "Auto Fuse + Fusion Animation Research loaded.",
+
+    Content =
+        "Auto Fuse + Animation Remover loaded.",
+
     Duration = 4
 })
