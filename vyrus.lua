@@ -20,6 +20,13 @@ local FusingUtil = require(
 local FuseRemote =
     ReplicatedStorage.Network.FusingService.RE.Fuse
 
+local ResultRemote =
+    ReplicatedStorage
+        :WaitForChild("Network")
+        :WaitForChild("FusingService")
+        :WaitForChild("RE")
+        :WaitForChild("Result")
+
 local Entries = UnitConfig.entries
 
 --//==================================================
@@ -37,12 +44,22 @@ local Settings = {
 
     -- Fusion visual optimization
     SkipFusionEffects = false,
+
+    -- Fusion controller research
+    DisableFusionController = false,
 }
 
 local Stats = {
     Done = 0,
     Scans = 0,
 }
+
+--//==================================================
+--// FUSION CONTROLLER STATE
+--//==================================================
+
+local DisabledConnections = {}
+local IsControllerDisabled = false
 
 --//==================================================
 --// NUMBER SUFFIXES
@@ -369,7 +386,7 @@ local Window = Rayfield:CreateWindow({
 
     LoadingTitle = "Auto Fuse",
 
-    LoadingSubtitle = "Exact Chance Fusion",
+    LoadingSubtitle = "Fusion Animation Research",
 
     ConfigurationSaving = {
         Enabled = false,
@@ -385,6 +402,12 @@ local Window = Rayfield:CreateWindow({
 local Tab =
     Window:CreateTab(
         "Fusing",
+        nil
+    )
+
+local ResearchTab =
+    Window:CreateTab(
+        "Animation Test",
         nil
     )
 
@@ -429,9 +452,6 @@ local function handleFusionObject(obj)
         return
     end
 
-    -- These were the expensive objects
-    -- observed during your fusion captures.
-
     if obj:IsA("ParticleEmitter")
         or obj:IsA("Beam")
         or obj:IsA("Trail") then
@@ -440,7 +460,6 @@ local function handleFusionObject(obj)
         return
     end
 
-    -- Cutscene fade
     if obj.Name == "CutsceneBlackFade"
         and obj:IsA("ScreenGui") then
 
@@ -529,6 +548,260 @@ Tab:CreateToggle({
         end
     end,
 })
+
+--//==================================================
+--// FUSING CONTROLLER RESEARCH
+--//==================================================
+
+local function getControllerConnection()
+
+    if not getconnections then
+
+        warn(
+            "[Fusion Research] getconnections is not supported."
+        )
+
+        return nil
+    end
+
+    for _, connection in ipairs(
+        getconnections(ResultRemote.OnClientEvent)
+    ) do
+
+        local fn = connection.Function
+
+        if fn then
+
+            local info =
+                debug.getinfo(fn)
+
+            if info and info.source then
+
+                if tostring(info.source):find(
+                    "FusingController",
+                    1,
+                    true
+                ) then
+
+                    return connection
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
+local function disableController()
+
+    if IsControllerDisabled then
+
+        warn(
+            "[Fusion Research] Controller listener already disabled."
+        )
+
+        return
+    end
+
+    local connection =
+        getControllerConnection()
+
+    if not connection then
+
+        warn(
+            "[Fusion Research] FusingController connection NOT FOUND."
+        )
+
+        Rayfield:Notify({
+            Title = "Fusion Research",
+            Content = "FusingController connection was not found.",
+            Duration = 4
+        })
+
+        return
+    end
+
+    DisabledConnections[1] =
+        connection
+
+    local success, err =
+        pcall(function()
+            connection:Disable()
+        end)
+
+    if not success then
+
+        table.clear(
+            DisabledConnections
+        )
+
+        warn(
+            "[Fusion Research] Failed to disable:",
+            err
+        )
+
+        return
+    end
+
+    IsControllerDisabled = true
+
+    warn("================================")
+    warn("FUSING CONTROLLER DISABLED")
+    warn("Result RemoteEvent remains active")
+    warn("Perform ONE fusion now.")
+    warn("================================")
+
+    Rayfield:Notify({
+        Title = "Fusion Research",
+        Content = "Controller disabled. Perform ONE fusion.",
+        Duration = 4
+    })
+end
+
+local function enableController()
+
+    if not IsControllerDisabled then
+
+        warn(
+            "[Fusion Research] Controller is already enabled."
+        )
+
+        return
+    end
+
+    for _, connection in ipairs(
+        DisabledConnections
+    ) do
+
+        pcall(function()
+            connection:Enable()
+        end)
+    end
+
+    table.clear(
+        DisabledConnections
+    )
+
+    IsControllerDisabled = false
+
+    warn("================================")
+    warn("FUSING CONTROLLER RESTORED")
+    warn("================================")
+
+    Rayfield:Notify({
+        Title = "Fusion Research",
+        Content = "FusingController restored.",
+        Duration = 3
+    })
+end
+
+--//==================================================
+--// CONTROLLER TOGGLE
+--//==================================================
+
+ResearchTab:CreateToggle({
+
+    Name = "Disable Fusion Result Controller",
+
+    CurrentValue = false,
+
+    Flag = "DisableFusionController",
+
+    Callback = function(value)
+
+        Settings.DisableFusionController =
+            value
+
+        if value then
+            disableController()
+        else
+            enableController()
+        end
+    end,
+})
+
+--//==================================================
+--// INSPECT RESULT CONNECTIONS
+--//==================================================
+
+ResearchTab:CreateButton({
+
+    Name = "Inspect Result Connections",
+
+    Callback = function()
+
+        warn("================================")
+        warn("RESULT CONNECTION INSPECTION")
+        warn("================================")
+
+        if not getconnections then
+
+            warn(
+                "getconnections unavailable"
+            )
+
+            return
+        end
+
+        local connections =
+            getconnections(
+                ResultRemote.OnClientEvent
+            )
+
+        warn(
+            "Connections:",
+            #connections
+        )
+
+        for i, connection in ipairs(
+            connections
+        ) do
+
+            local fn =
+                connection.Function
+
+            if fn then
+
+                local info =
+                    debug.getinfo(fn)
+
+                warn(
+                    "#" .. i,
+                    "SOURCE =",
+                    info and info.source or "unknown",
+                    "LINE =",
+                    info and info.currentline or "unknown"
+                )
+            end
+        end
+
+        warn("================================")
+    end,
+})
+
+--//==================================================
+--// RESEARCH STATUS
+--//==================================================
+
+ResearchTab:CreateSection(
+    "Fusion Animation Isolation"
+)
+
+ResearchTab:CreateLabel(
+    "Effect suppressor: Particles / Beams / Trails / Fade"
+)
+
+ResearchTab:CreateLabel(
+    "Controller test: FusingController Result callback"
+)
+
+ResearchTab:CreateLabel(
+    "Use one test at a time when comparing frame behavior."
+)
+
+ResearchTab:CreateLabel(
+    "If controller is disabled, Result RemoteEvent stays active."
+)
 
 --//==================================================
 --// FROM INPUT
@@ -918,8 +1191,26 @@ Tab:CreateLabel(
     "Exactly 3 units are selected."
 )
 
+--//==================================================
+--// CLEANUP
+--//==================================================
+
+game:GetService("Players").LocalPlayer.CharacterRemoving:Connect(
+    function()
+        if IsControllerDisabled then
+            enableController()
+        end
+
+        stopFusionEffectSuppressor()
+    end
+)
+
+--//==================================================
+--// LOADED
+--//==================================================
+
 Rayfield:Notify({
     Title = "Auto Fuse",
-    Content = "Loaded successfully.",
+    Content = "Auto Fuse + Fusion Animation Research loaded.",
     Duration = 4
 })
